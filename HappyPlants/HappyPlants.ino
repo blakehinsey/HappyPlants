@@ -6,9 +6,13 @@
 //Soil and Water Level Sensors
   //Sensors and values
   const int sensSoilPin = A0; //moisture sensor pin
-  int sensSoilValue;
+  int sensSoilValue = 0;
+  int sensSoilValueLast = 0;
+  int threshSoilValue; // soil moisture level limit ** is this min or max?
   const int sensWaterPin = A1; //water level sensor pin
-  int sensWaterValue;
+  int sensWaterValue = 0;
+  int sensWaterValueLast = 0;
+  int threshWaterValue = 700; // pump turn on water level sensor reading threshold
   //Timers and states
   int tMeasInterval = 10; //take a measurement every tMeasInterval seconds
     //** target interval of 10 minutes (600s)
@@ -17,10 +21,6 @@
   unsigned long tMeasCount = 0; //tCurrent while measState is HIGH
   int tMeasDuration = 5; // duration to take moisture level readings
     //target duration 5s
-  //Thresholds
-  int threshWaterValue = 700; // pump turn on water level sensor reading threshold
-  int threshSoilValue; // soil moisture level limit ** is this min or max?
-    //** this still isn't used in the code
 
 //Pump control
   //Sensors
@@ -68,10 +68,18 @@ void loop() {
     tMeasCount = tCurrent;
     digitalWrite(13,HIGH); //signal to turn on soil measurement
     sensSoilValue = analogRead(sensSoilPin);
-    //** if can run both sensors in parallell, use the same trigger ie: measState should turn on moisture and water level sensor
-  }
+    //sensWaterValue = analogRead(sensWaterPin);
+
+    }
   else {
-    //** add a loop of logic to set the 'sensSoilValueLast' and sensWaterValueLast on the falling edge of
+    // On the falling edge of meas state, store the sensor reading in "last"
+    //** Is there a better water level sensor to use that is inexpensive?
+    if(measState == HIGH){
+      sensSoilValueLast = sensSoilValue;
+      sensSoilValue = 0;
+      sensWaterValueLast = sensWaterValue;
+      sensWaterValue = 0;
+    }
     //** measState for the pump state machine to use
     measState = LOW;
     tMeasCount = 0;
@@ -87,17 +95,23 @@ void loop() {
  */
 
   // Pump Timer
-    if((tCurrent - tPumpStart) > tPumpInterval){ //check if the required time interval has passed
+    /*
+      Check if the required time interval for the pump has passed, if so set pumpState HIGH
+      Then check if the moisture level is too high or the water level is low and disable accordingly
+    */
+    if((tCurrent - tPumpStart) > tPumpInterval){
       pumpState = HIGH;
       tPumpStart = tCurrent;
     }
-  // Check the status of the water level sensor
-  if(sensWaterValue > threshWaterValue){ //** pick a sensible value for sensor out of water contact
-    pumpState = LOW;
-    //** turn on low water level LED
-  }
 
-  //** check moisture level sensor, if too high skip watering cycle
+  // Check the status of the water level sensor and soil moisture
+  if(sensWaterValueLast > threshWaterValue || sensSoilValueLast > threshWaterValue){
+    //** pick a sensible value for sensor out of water contact
+    //** verify 'calibration' of these sensors
+    pumpState = LOW;
+    //** turn on low water level LED - need to prototype this
+    //** status light for soil moisture, three stage? use 3 stage LED?
+  }
 
   if(pumpState == HIGH && (tCurrent - tPumpStart) <= tPumpDuration){
     tPumpCount = tCurrent;
